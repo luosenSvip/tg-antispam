@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>牛牛牌桌</title>
+  <style>
+    :root {
+      --bg-deep: #0b223a;
+      --bg-mid: #16385d;
+      --bg-light: #23547f;
+      --panel: rgba(8, 29, 49, 0.85);
+      --line: rgba(180, 210, 235, 0.25);
+      --text: #edf5fc;
+      --muted: #b8cfe1;
+      --accent: #f8d27a;
+      --ok: #85e6b9;
+      --danger: #ff8d8d;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at 15% -10%, rgba(248, 210, 122, 0.22), transparent 45%),
+        radial-gradient(circle at 85% -8%, rgba(133, 200, 230, 0.2), transparent 40%),
+        linear-gradient(160deg, var(--bg-deep), var(--bg-mid) 52%, var(--bg-light));
+      padding: 12px;
+    }
+
+    .table {
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      overflow: hidden;
+      background: linear-gradient(160deg, rgba(8, 30, 49, 0.95), rgba(14, 41, 66, 0.92));
+      box-shadow: 0 20px 54px rgba(2, 10, 18, 0.4);
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .title { font-size: 20px; font-weight: 700; }
+    .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .body { display: grid; gap: 12px; padding: 14px; }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 12px;
+    }
+    .panel h3 { margin: 0 0 8px; font-size: 15px; color: var(--muted); }
+    .line { margin-top: 6px; color: var(--muted); font-size: 14px; }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 72px;
+      align-items: center;
+    }
+
+    .card {
+      width: 50px;
+      height: 72px;
+      border-radius: 10px;
+      border: 1px solid rgba(200, 220, 238, 0.35);
+      background: linear-gradient(160deg, #ffffff, #eef4fb);
+      color: #1b1b1b;
+      position: relative;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
+    }
+    .card .rank {
+      position: absolute;
+      left: 7px;
+      top: 5px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .card .suit {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+    }
+    .card.red { color: #c93434; }
+    .card.back {
+      background: linear-gradient(160deg, #2f5d9a, #1e4170);
+      border-color: rgba(210, 228, 248, 0.7);
+      color: #f2f7ff;
+    }
+    .card.back .rank {
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .card.back .suit { display: none; }
+    .card.deal-in {
+      animation: card-deal-in 0.42s ease-out;
+    }
+
+    @keyframes card-deal-in {
+      from {
+        opacity: 0;
+        transform: translateY(-14px) scale(0.92);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .players {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+    }
+    .player {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .player.me {
+      border-color: rgba(248, 210, 122, 0.6);
+      box-shadow: inset 0 0 0 1px rgba(248, 210, 122, 0.24);
+    }
+    .player-name {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .status { font-size: 12px; color: var(--muted); }
+    .status.win { color: var(--ok); }
+    .status.lose { color: var(--danger); }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: var(--text);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+      cursor: pointer;
+    }
+    button.primary {
+      border-color: rgba(248, 210, 122, 0.5);
+      background: linear-gradient(145deg, rgba(248, 210, 122, 0.3), rgba(248, 210, 122, 0.12));
+      color: #fff6df;
+    }
+    button.warn {
+      border-color: rgba(255, 141, 141, 0.45);
+      background: linear-gradient(145deg, rgba(255, 141, 141, 0.25), rgba(255, 141, 141, 0.1));
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .log {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--line);
+      white-space: pre-wrap;
+      line-height: 1.55;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .error {
+      font-size: 13px;
+      color: #ffd5d5;
+      min-height: 18px;
+    }
+
+    .phase-banner {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+      border: 1px solid rgba(248, 210, 122, 0.62);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff8e8;
+      background: linear-gradient(145deg, rgba(248, 210, 122, 0.32), rgba(248, 210, 122, 0.12));
+      transition: opacity 0.12s linear;
+    }
+    .phase-banner.show { opacity: 1; }
+
+    @media (max-width: 640px) {
+      body { padding: 8px; }
+      .header { padding: 12px; }
+      .title { font-size: 18px; }
+      .card { width: 42px; height: 60px; }
+      .cards { min-height: 60px; }
+      button { flex: 1 1 calc(50% - 6px); }
+    }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main class="table">
+    <section class="header">
+      <div>
+        <div class="title">牛牛牌桌</div>
+        <div class="sub">房主坐庄 · 人数不限 · 牛1-7可赢(1倍)，牛8起翻倍</div>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="body">
+      <div class="error" id="errorText"></div>
+
+      <div class="panel">
+        <h3 id="dealerTitle">庄家</h3>
+        <div class="cards" id="dealerCards"></div>
+        <div class="line" id="dealerInfo">牌型：--</div>
+      </div>
+
+      <div class="panel">
+        <h3>闲家</h3>
+        <div class="players" id="players"></div>
+      </div>
+
+      <div class="panel">
+        <h3>操作</h3>
+        <div class="actions" id="actions"></div>
+        <div class="log" id="logText">等待数据...</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="phaseBanner" class="phase-banner"></div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const query = new URLSearchParams(window.location.search);
+    const launch = {
+      chatId: Number(query.get("chatId") || 0),
+      dealerId: Number(query.get("dealerId") || 0),
+      launchTs: Number(query.get("ts") || 0),
+      launchSig: String(query.get("sig") || ""),
+    };
+    const initData = tg ? tg.initData : "";
+
+    const dom = {
+      chips: document.getElementById("chips"),
+      errorText: document.getElementById("errorText"),
+      dealerTitle: document.getElementById("dealerTitle"),
+      dealerCards: document.getElementById("dealerCards"),
+      dealerInfo: document.getElementById("dealerInfo"),
+      players: document.getElementById("players"),
+      actions: document.getElementById("actions"),
+      logText: document.getElementById("logText"),
+      phaseBanner: document.getElementById("phaseBanner"),
+    };
+
+    let currentState = null;
+    let busy = false;
+    let lastStateKey = "";
+    let phaseBannerTimer = null;
+    let previousPhase = "";
+    let animationOverrideState = null;
+    let revealDoneStateKey = "";
+    const revealTimers = [];
+    const FINISHED_HINT_TEXT = "本局已结束，庄家可选择再来一局；闲家需重新点击加入。";
+    const actionButtons = new Map();
+
+    function safeText(value) { return String(value == null ? "" : value); }
+    function escapeHtml(value) {
+      return safeText(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function isRedSuit(suit) { return suit === "♥" || suit === "♦"; }
+
+    function showPhaseBanner(text) {
+      if (!dom.phaseBanner) return;
+      dom.phaseBanner.textContent = safeText(text || "");
+      dom.phaseBanner.classList.add("show");
+      if (phaseBannerTimer) clearTimeout(phaseBannerTimer);
+      phaseBannerTimer = setTimeout(() => dom.phaseBanner.classList.remove("show"), 1600);
+    }
+
+    function cardHtml(card) {
+      const hidden = Boolean(card && card.hidden);
+      const rank = safeText(hidden ? "🐮" : (card && card.rank ? card.rank : "?"));
+      const suit = safeText(hidden ? "" : (card && card.suit ? card.suit : "?"));
+      const dealIn = Boolean(card && card.dealIn);
+      return `<div class="card ${hidden ? "back" : ""} ${!hidden && isRedSuit(suit) ? "red" : ""} ${dealIn ? "deal-in" : ""}"><span class="rank">${escapeHtml(rank)}</span><span class="suit">${escapeHtml(suit)}</span></div>`;
+    }
+
+    function renderCards(container, cards) {
+      const list = Array.isArray(cards) ? cards : [];
+      if (!list.length) {
+        container.innerHTML = '<div class="line">暂无手牌</div>';
+        return;
+      }
+      const html = list.map((card) => cardHtml(card)).join("");
+      container.innerHTML = html;
+    }
+
+    function getPlayerStatus(player, showOutcome) {
+      if (!showOutcome) return { text: "等待发牌", cls: "status" };
+      const outcome = safeText(player.outcome);
+      if (outcome === "win") return { text: `胜 x${Number(player.multiplier || 1)}`, cls: "status win" };
+      if (outcome === "lose") return { text: "负", cls: "status lose" };
+      return { text: "等待开局", cls: "status" };
+    }
+
+    function renderPlayers(players, viewerId, showOutcome) {
+      const list = Array.isArray(players) ? players : [];
+      if (!list.length) {
+        dom.players.innerHTML = '<div class="line">暂无闲家入座</div>';
+        return;
+      }
+      dom.players.innerHTML = list.map((player) => {
+        const status = getPlayerStatus(player, showOutcome);
+        const cardsHtml = (Array.isArray(player.cards) && player.cards.length)
+          ? player.cards.map((card) => cardHtml(card)).join("")
+          : '<div class="line">暂无手牌</div>';
+        return `
+          <article class="player ${Number(player.id) === Number(viewerId) ? "me" : ""}">
+            <div class="player-name">
+              <strong>${escapeHtml(player.name)}</strong>
+              <span class="${status.cls}">${escapeHtml(status.text)}</span>
+            </div>
+            <div class="cards">${cardsHtml}</div>
+            <div class="line">牌型：<strong>${escapeHtml(player.handLabel || "--")}</strong></div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function ensureActionButtons() {
+      if (actionButtons.size > 0) return;
+      const defs = [
+        ["创建牌桌", "create", "primary"],
+        ["加入牌桌", "join", "primary"],
+        ["离开牌桌", "leave", ""],
+        ["开始发牌", "start", "primary"],
+        ["再来一局", "restart", ""],
+        ["关闭牌桌", "close", "warn"],
+      ];
+      defs.forEach(([label, action, cls]) => {
+        const btn = document.createElement("button");
+        btn.textContent = label;
+        if (cls) btn.className = cls;
+        btn.style.display = "none";
+        btn.disabled = true;
+        btn.addEventListener("click", () => runAction(action));
+        actionButtons.set(action, btn);
+        dom.actions.appendChild(btn);
+      });
+
+      const refresh = document.createElement("button");
+      refresh.textContent = "刷新";
+      refresh.addEventListener("click", async (event) => {
+        event.preventDefault();
+        await loadState(true);
+      });
+      actionButtons.set("refresh", refresh);
+      dom.actions.appendChild(refresh);
+    }
+
+    function updateActions(actions) {
+      ensureActionButtons();
+      const flags = {
+        create: !!actions.canCreate,
+        join: !!actions.canJoin,
+        leave: !!actions.canLeave,
+        start: !!actions.canStart,
+        restart: !!actions.canRestart,
+        close: !!actions.canClose,
+      };
+      Object.keys(flags).forEach((key) => {
+        const btn = actionButtons.get(key);
+        if (!btn) return;
+        btn.style.display = flags[key] ? "" : "none";
+        btn.disabled = busy;
+      });
+      const refresh = actionButtons.get("refresh");
+      if (refresh) {
+        refresh.style.display = "";
+        refresh.disabled = busy;
+      }
+    }
+
+    async function postJson(path, payload) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.error) {
+        throw new Error(result.error || "请求失败");
+      }
+      return result;
+    }
+
+    function setError(message) {
+      if (dom.errorText.textContent !== safeText(message)) {
+        dom.errorText.textContent = safeText(message);
+      }
+    }
+
+    function phaseLabel(phase) {
+      if (phase === "lobby") return "等待开局";
+      if (phase === "finished") return "已结算";
+      return "未创建";
+    }
+
+    function deepClone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function clearRevealAnimation() {
+      while (revealTimers.length > 0) {
+        const timer = revealTimers.pop();
+        if (timer) clearTimeout(timer);
+      }
+      animationOverrideState = null;
+    }
+
+    function maybeStartFinishRevealAnimation(nextState) {
+      const phase = safeText(nextState && nextState.phase);
+      const prev = previousPhase;
+      previousPhase = phase;
+
+      if (phase !== "finished") {
+        if (animationOverrideState) clearRevealAnimation();
+        return;
+      }
+
+      const transitionedToFinished = prev && prev !== "finished" && phase === "finished";
+      if (!transitionedToFinished) return;
+
+      const stateKey = safeText(nextState && nextState.stateKey);
+      if (!stateKey || stateKey === revealDoneStateKey) return;
+
+      const room = nextState && nextState.room ? nextState.room : null;
+      if (!room) return;
+
+      clearRevealAnimation();
+      const fullState = deepClone(nextState);
+      const animatedState = deepClone(nextState);
+
+      const dealerCards = (fullState.room && fullState.room.dealer && Array.isArray(fullState.room.dealer.cards))
+        ? fullState.room.dealer.cards
+        : [];
+      const players = (fullState.room && Array.isArray(fullState.room.players)) ? fullState.room.players : [];
+
+      if (animatedState.room && animatedState.room.dealer) {
+        animatedState.room.dealer.cards = dealerCards.map(() => ({ rank: "?", suit: "?", hidden: true }));
+        animatedState.room.dealer.pointsText = "--";
+        animatedState.room.dealer.handLabel = "--";
+        animatedState.room.lastAction = "正在结算揭牌...";
+        animatedState.room.resultLines = [];
+      }
+      players.forEach((player, playerIndex) => {
+        const count = Array.isArray(player.cards) ? player.cards.length : 0;
+        animatedState.room.players[playerIndex].cards = new Array(count).fill(0).map(() => ({ rank: "?", suit: "?", hidden: true }));
+        animatedState.room.players[playerIndex].points = "?";
+        animatedState.room.players[playerIndex].handLabel = "--";
+      });
+
+      if (animatedState.actions) {
+        animatedState.actions.canCreate = false;
+        animatedState.actions.canJoin = false;
+        animatedState.actions.canLeave = false;
+        animatedState.actions.canStart = false;
+        animatedState.actions.canRestart = false;
+        animatedState.actions.canClose = false;
+      }
+
+      animationOverrideState = animatedState;
+      setError("正在结算揭牌...");
+
+      const maxCount = Math.max(
+        dealerCards.length,
+        ...players.map((player) => (Array.isArray(player.cards) ? player.cards.length : 0)),
+        0
+      );
+      const steps = [];
+      for (let i = 0; i < maxCount; i += 1) {
+        if (i < dealerCards.length) steps.push({ kind: "dealer", cardIndex: i });
+        players.forEach((player, playerIndex) => {
+          if (Array.isArray(player.cards) && i < player.cards.length) {
+            steps.push({ kind: "player", playerIndex, cardIndex: i });
+          }
+        });
+      }
+
+      function clearDealInMarks() {
+        if (!animationOverrideState || !animationOverrideState.room) return;
+        const dealerList = animationOverrideState.room.dealer && Array.isArray(animationOverrideState.room.dealer.cards)
+          ? animationOverrideState.room.dealer.cards
+          : [];
+        dealerList.forEach((card) => {
+          if (card && card.dealIn) delete card.dealIn;
+        });
+        const playerList = Array.isArray(animationOverrideState.room.players) ? animationOverrideState.room.players : [];
+        playerList.forEach((player) => {
+          const cards = Array.isArray(player.cards) ? player.cards : [];
+          cards.forEach((card) => {
+            if (card && card.dealIn) delete card.dealIn;
+          });
+        });
+      }
+
+      steps.forEach((step, idx) => {
+        const timer = setTimeout(() => {
+          if (!animationOverrideState || !animationOverrideState.room) return;
+          clearDealInMarks();
+          if (step.kind === "dealer") {
+            const card = fullState.room.dealer.cards[step.cardIndex];
+            animationOverrideState.room.dealer.cards[step.cardIndex] = {
+              rank: card.rank,
+              suit: card.suit,
+              hidden: false,
+              dealIn: true,
+            };
+            if (step.cardIndex === fullState.room.dealer.cards.length - 1) {
+              animationOverrideState.room.dealer.pointsText = fullState.room.dealer.pointsText;
+              animationOverrideState.room.dealer.handLabel = fullState.room.dealer.handLabel;
+            }
+          } else {
+            const card = fullState.room.players[step.playerIndex].cards[step.cardIndex];
+            animationOverrideState.room.players[step.playerIndex].cards[step.cardIndex] = {
+              rank: card.rank,
+              suit: card.suit,
+              hidden: false,
+              dealIn: true,
+            };
+            if (step.cardIndex === fullState.room.players[step.playerIndex].cards.length - 1) {
+              animationOverrideState.room.players[step.playerIndex].points = fullState.room.players[step.playerIndex].points;
+              animationOverrideState.room.players[step.playerIndex].handLabel = fullState.room.players[step.playerIndex].handLabel;
+            }
+          }
+          render();
+        }, 220 + idx * 260);
+        revealTimers.push(timer);
+      });
+
+      const doneTimer = setTimeout(() => {
+        revealDoneStateKey = stateKey;
+        clearRevealAnimation();
+        currentState = fullState;
+        showPhaseBanner("本局已结束");
+        setError(FINISHED_HINT_TEXT);
+        render();
+      }, 320 + steps.length * 260);
+      revealTimers.push(doneTimer);
+    }
+
+    function render() {
+      const state = animationOverrideState || currentState;
+      if (!state) return;
+      const room = state.room;
+      const viewer = state.viewer || {};
+      const actions = state.actions || {};
+      const points = state.requirements && state.requirements.points ? state.requirements.points : {};
+      const joinMinInclusive = Number(points.joinMinInclusive || 0);
+
+      const chips = [
+        `阶段：${phaseLabel(state.phase)}`,
+        `身份：${viewer.authenticated ? (viewer.isDealer ? "庄家" : (viewer.isJoined ? "闲家" : "旁观")) : "浏览器访客"}`,
+        points.enabled ? `入桌门槛：积分 >= ${joinMinInclusive}` : "积分系统：未开启",
+      ];
+      if (viewer.authenticated && Number.isFinite(Number(points.viewerPoints))) {
+        chips.push(`我的积分：${Number(points.viewerPoints)}`);
+      }
+      dom.chips.innerHTML = chips.map((chip) => `<span class="chip">${escapeHtml(chip)}</span>`).join("");
+
+      if (room) {
+        dom.dealerTitle.textContent = `庄家：${safeText(room.dealer && room.dealer.name ? room.dealer.name : "未定")}`;
+        renderCards(dom.dealerCards, room.dealer && room.dealer.cards ? room.dealer.cards : []);
+        const dealerHand = safeText(room.dealer && room.dealer.handLabel ? room.dealer.handLabel : "--");
+        dom.dealerInfo.textContent = `牌型：${dealerHand}`;
+        renderPlayers(room.players || [], viewer.id, !animationOverrideState);
+
+        const lines = [];
+        if (state.phase === "lobby") {
+          if (!points.enabled) {
+            lines.push("提示：本群未开启积分系统，当前无法开局。请先开启积分系统。");
+          } else if (Array.isArray(points.lowPointUsers) && points.lowPointUsers.length > 0) {
+            lines.push(`提示：以下成员积分需不少于 ${joinMinInclusive} 才能开局：${points.lowPointUsers.join("、")}`);
+          }
+        }
+        if (room.lastAction) lines.push(`动态：${room.lastAction}`);
+        if (Array.isArray(room.resultLines) && room.resultLines.length > 0) {
+          lines.push("", "结算：", ...room.resultLines.map((line) => `- ${line}`));
+        }
+        dom.logText.textContent = lines.join("\n") || "等待操作...";
+      } else {
+        dom.dealerTitle.textContent = "庄家";
+        dom.dealerCards.innerHTML = '<div class="line">牌桌未创建</div>';
+        dom.dealerInfo.textContent = "牌型：--";
+        dom.players.innerHTML = '<div class="line">等待庄家创建牌桌</div>';
+        dom.logText.textContent = "请由房主先创建牌桌。";
+      }
+
+      updateActions(actions);
+    }
+
+    async function loadState(showError) {
+      try {
+        const result = await postJson("/api/niuniu/state", { ...launch, initData });
+        const nextState = result.state;
+        const stateKey = safeText(nextState && nextState.stateKey);
+        if (stateKey && stateKey === lastStateKey) {
+          return;
+        }
+        currentState = nextState;
+        lastStateKey = stateKey;
+        maybeStartFinishRevealAnimation(nextState);
+        if (safeText(nextState && nextState.phase) === "finished") {
+          if (!animationOverrideState) {
+            showPhaseBanner("本局已结束");
+            setError(FINISHED_HINT_TEXT);
+          }
+        } else {
+          setError("");
+        }
+        render();
+      } catch (error) {
+        if (showError) {
+          setError(String(error && error.message ? error.message : error || "状态加载失败"));
+        }
+      }
+    }
+
+    async function runAction(action) {
+      if (!currentState || busy) return;
+      busy = true;
+      try {
+        const result = await postJson("/api/niuniu/action", {
+          ...launch,
+          initData,
+          action,
+        });
+        currentState = result.state;
+        lastStateKey = safeText(result.state && result.state.stateKey);
+        maybeStartFinishRevealAnimation(result.state);
+        if (result.finished === true) {
+          if (!animationOverrideState) {
+            showPhaseBanner("本局已结束");
+            setError(FINISHED_HINT_TEXT);
+          }
+        } else if (result.closed === true) {
+          setError("牌桌已关闭，请回群里重新发送 /nn。");
+        } else {
+          setError("");
+        }
+      } catch (error) {
+        setError(String(error && error.message ? error.message : error || "操作失败"));
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+
+    (async () => {
+      await loadState(true);
+      setInterval(() => {
+        if (!busy) loadState(false);
+      }, 2200);
+    })();
+  </script>
+</body>
+</html>

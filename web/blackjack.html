@@ -1,0 +1,1213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>21点牌桌</title>
+  <style>
+    :root {
+      --bg-deep: #07251d;
+      --bg-mid: #0f3b2f;
+      --bg-light: #1d5a46;
+      --panel: rgba(10, 34, 28, 0.82);
+      --line: rgba(180, 220, 204, 0.22);
+      --text: #ecf8f3;
+      --muted: #b8d3c8;
+      --accent: #f7c76d;
+      --danger: #ff7f7f;
+      --ok: #83e7b2;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at 20% -5%, rgba(247, 199, 109, 0.22), transparent 46%),
+        radial-gradient(circle at 85% 0%, rgba(118, 201, 174, 0.18), transparent 38%),
+        linear-gradient(160deg, var(--bg-deep), var(--bg-mid) 50%, var(--bg-light));
+      padding: 12px;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -30% -10%;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.07) 0, rgba(255, 255, 255, 0.01) 22%, transparent 42%),
+        radial-gradient(circle at 72% 68%, rgba(255, 255, 255, 0.05) 0, rgba(255, 255, 255, 0.01) 18%, transparent 38%);
+      opacity: 0.55;
+      z-index: -1;
+    }
+
+    .table {
+      position: relative;
+      max-width: 920px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      background: linear-gradient(160deg, rgba(8, 36, 29, 0.95), rgba(12, 47, 38, 0.92));
+      border-radius: 22px;
+      box-shadow: 0 20px 56px rgba(2, 10, 8, 0.45);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .table::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 18%;
+      width: 132%;
+      height: 88%;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: radial-gradient(ellipse at center, rgba(26, 88, 68, 0.17), rgba(0, 0, 0, 0));
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .header-tools {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tool-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tool-btn.off {
+      opacity: 0.7;
+      filter: saturate(0.65);
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      padding: 12px;
+    }
+
+    .panel.hot {
+      border-color: rgba(247, 199, 109, 0.62);
+      box-shadow: 0 0 0 1px rgba(247, 199, 109, 0.18);
+    }
+
+    .panel h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .line {
+      font-size: 14px;
+      margin-top: 6px;
+      color: var(--muted);
+    }
+
+    .line strong {
+      color: var(--text);
+    }
+
+    .cards {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-height: 88px;
+      align-items: center;
+    }
+
+    .card {
+      position: relative;
+      width: 64px;
+      height: 92px;
+      border-radius: 10px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.26);
+      overflow: hidden;
+    }
+
+    .card-image {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 10px;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .card.hidden {
+      box-shadow: 0 8px 16px rgba(1, 20, 42, 0.38);
+    }
+
+    .players {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 10px;
+    }
+
+    .player {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .player.me {
+      border-color: rgba(247, 199, 109, 0.55);
+      box-shadow: inset 0 0 0 1px rgba(247, 199, 109, 0.25);
+    }
+
+    .player.current {
+      border-color: rgba(131, 231, 178, 0.62);
+      box-shadow: inset 0 0 0 1px rgba(131, 231, 178, 0.22);
+    }
+
+    .player-name {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status.win { color: var(--ok); }
+    .status.lose { color: var(--danger); }
+    .status.push { color: var(--accent); }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+    }
+
+    button.primary {
+      border-color: rgba(247, 199, 109, 0.45);
+      background: linear-gradient(145deg, rgba(247, 199, 109, 0.26), rgba(247, 199, 109, 0.12));
+      color: #fff8ea;
+    }
+
+    button.warn {
+      border-color: rgba(255, 127, 127, 0.4);
+      background: linear-gradient(145deg, rgba(255, 127, 127, 0.25), rgba(255, 127, 127, 0.1));
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .log {
+      border-top: 1px dashed var(--line);
+      margin-top: 10px;
+      padding-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .error {
+      color: #ffd1d1;
+      font-size: 13px;
+      min-height: 18px;
+    }
+
+    .turn-toast {
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(247, 199, 109, 0.55);
+      background: linear-gradient(145deg, rgba(247, 199, 109, 0.26), rgba(247, 199, 109, 0.12));
+      color: #fff7e2;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s linear;
+      z-index: 999;
+    }
+
+    .turn-toast.show {
+      opacity: 1;
+    }
+
+    .phase-banner {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+      border: 1px solid rgba(247, 199, 109, 0.66);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff8e8;
+      background: linear-gradient(145deg, rgba(247, 199, 109, 0.3), rgba(247, 199, 109, 0.12));
+      transition: opacity 0.1s linear;
+    }
+
+    .phase-banner.show {
+      opacity: 1;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 8px; }
+      .header { padding: 12px; }
+      .title { font-size: 18px; }
+      .card { width: 54px; height: 78px; }
+      .cards { min-height: 78px; }
+      button { flex: 1 1 calc(50% - 6px); }
+      .header-tools { width: 100%; justify-content: flex-end; }
+    }
+  </style>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main class="table">
+    <section class="header">
+      <div>
+        <div class="title">21点牌桌</div>
+        <div class="sub">房主坐庄 · 卡牌模式 · 同桌最多6人</div>
+      </div>
+      <div class="header-tools">
+        <button id="soundToggle" class="tool-btn" type="button">🔊 音效 开</button>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="body">
+      <div class="error" id="errorText"></div>
+
+      <div class="panel" id="dealerPanel">
+        <h3 id="dealerTitle">庄家</h3>
+        <div class="cards" id="dealerCards"></div>
+        <div class="line" id="dealerPoints">点数：--</div>
+      </div>
+
+      <div class="panel" id="playersPanel">
+        <h3>闲家</h3>
+        <div class="players" id="players"></div>
+      </div>
+
+      <div class="panel" id="actionsPanel">
+        <h3>操作</h3>
+        <div class="actions" id="actions"></div>
+        <div class="log" id="logText">等待数据...</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="turnToast" class="turn-toast">轮到你操作了</div>
+  <div id="phaseBanner" class="phase-banner"></div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const query = new URLSearchParams(window.location.search);
+    const launch = {
+      chatId: Number(query.get("chatId") || 0),
+      dealerId: Number(query.get("dealerId") || 0),
+      launchTs: Number(query.get("ts") || 0),
+      launchSig: String(query.get("sig") || ""),
+    };
+
+    const initData = tg ? tg.initData : "";
+
+    const dom = {
+      chips: document.getElementById("chips"),
+      soundToggle: document.getElementById("soundToggle"),
+      errorText: document.getElementById("errorText"),
+      dealerPanel: document.getElementById("dealerPanel"),
+      playersPanel: document.getElementById("playersPanel"),
+      actionsPanel: document.getElementById("actionsPanel"),
+      dealerTitle: document.getElementById("dealerTitle"),
+      dealerCards: document.getElementById("dealerCards"),
+      dealerPoints: document.getElementById("dealerPoints"),
+      players: document.getElementById("players"),
+      actions: document.getElementById("actions"),
+      logText: document.getElementById("logText"),
+      turnToast: document.getElementById("turnToast"),
+      phaseBanner: document.getElementById("phaseBanner"),
+    };
+
+    let currentState = null;
+    let busy = false;
+    let previousTurnSignature = "";
+    let audioContext = null;
+    let hasUserInteracted = false;
+    let pendingToneHint = false;
+    let turnToastTimer = null;
+    let phaseBannerTimer = null;
+    let previousPhase = "";
+    let soundEnabled = true;
+    let lastStateSignature = "";
+    const actionButtonNodes = new Map();
+    const playerNodeCache = new Map();
+    const lastRenderCache = {
+      chips: "",
+      dealerTitle: "",
+      dealerPoints: "",
+      dealerCards: "",
+      players: "",
+      log: "",
+      dealerHot: null,
+      playersHot: null,
+      actionsHot: null,
+    };
+
+    try {
+      const saved = localStorage.getItem("bj_sound_enabled");
+      if (saved === "0") soundEnabled = false;
+    } catch {}
+
+    function ensureAudioContext() {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!audioContext) {
+        try {
+          audioContext = new Ctx();
+        } catch {
+          audioContext = null;
+        }
+      }
+      return audioContext;
+    }
+
+    function playToneHint() {
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+
+      const resumeAndPlay = () => {
+        const now = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.connect(ctx.destination);
+
+        function beep(freq, startOffset, duration) {
+          const osc = ctx.createOscillator();
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(freq, now + startOffset);
+          osc.connect(gain);
+          osc.start(now + startOffset);
+          osc.stop(now + startOffset + duration);
+        }
+
+        gain.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+        beep(760, 0.0, 0.14);
+        beep(980, 0.16, 0.12);
+      };
+
+      if (ctx.state === "suspended") {
+        if (!hasUserInteracted) {
+          pendingToneHint = true;
+          return;
+        }
+        ctx.resume().then(() => {
+          pendingToneHint = false;
+          resumeAndPlay();
+        }).catch(() => {});
+      } else {
+        pendingToneHint = false;
+        resumeAndPlay();
+      }
+    }
+
+    function showTurnToast() {
+      const node = dom.turnToast;
+      if (!node) return;
+      node.classList.add("show");
+      if (turnToastTimer) clearTimeout(turnToastTimer);
+      turnToastTimer = setTimeout(() => {
+        node.classList.remove("show");
+      }, 2400);
+    }
+
+    function showPhaseBanner(text) {
+      const node = dom.phaseBanner;
+      if (!node) return;
+      node.textContent = safeText(text || "");
+      node.classList.add("show");
+      if (phaseBannerTimer) clearTimeout(phaseBannerTimer);
+      phaseBannerTimer = setTimeout(() => {
+        node.classList.remove("show");
+      }, 1400);
+    }
+
+    function updateSoundToggle() {
+      const btn = dom.soundToggle;
+      if (!btn) return;
+      btn.textContent = soundEnabled ? "🔊 音效 开" : "🔇 音效 关";
+      btn.classList.toggle("off", !soundEnabled);
+    }
+
+    function triggerTurnHint() {
+      if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.notificationOccurred === "function") {
+        try {
+          tg.HapticFeedback.notificationOccurred("warning");
+        } catch {}
+      }
+      if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === "function") {
+        try {
+          tg.HapticFeedback.impactOccurred("heavy");
+        } catch {}
+      }
+      if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.selectionChanged === "function") {
+        try {
+          tg.HapticFeedback.selectionChanged();
+        } catch {}
+      }
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([120, 60, 180]);
+        } catch {}
+      }
+      showTurnToast();
+      if (soundEnabled) playToneHint();
+    }
+
+    function maybeNotifyTurn(state) {
+      if (!state) return;
+      const room = state.room || null;
+      const viewer = state.viewer || {};
+      const turnPlayerId = room && room.currentTurnPlayerId ? Number(room.currentTurnPlayerId) : 0;
+      const signature = `${safeText(state.phase)}|${turnPlayerId}|${room && room.dealerTurn ? 1 : 0}`;
+      const changed = previousTurnSignature !== "" && previousTurnSignature !== signature;
+      const firstLoad = previousTurnSignature === "";
+      previousTurnSignature = signature;
+
+      if (safeText(state.phase) !== "playing") return;
+      if (viewer.authenticated !== true) return;
+      if (viewer.isCurrentTurn !== true) return;
+      if (firstLoad || changed) {
+        triggerTurnHint();
+      }
+    }
+
+    function maybeNotifyPhase(state) {
+      if (!state) return;
+      const phase = safeText(state.phase);
+      const changed = previousPhase !== "" && previousPhase !== phase;
+      const firstLoad = previousPhase === "";
+      previousPhase = phase;
+      if (firstLoad || !changed) return;
+      if (phase === "finished") {
+        showPhaseBanner("本局已结束");
+      }
+    }
+
+    function safeText(value) {
+      return String(value == null ? "" : value);
+    }
+
+    function getStateSignature(state) {
+      try {
+        return JSON.stringify(state || null);
+      } catch {
+        return String(Date.now());
+      }
+    }
+
+    function escapeHtml(value) {
+      return safeText(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function isRedSuit(suit) {
+      return suit === "♥" || suit === "♦";
+    }
+
+    const CARD_ART_CACHE = new Map();
+
+    const CARD_PIP_LAYOUTS = {
+      A: [[50, 70]],
+      2: [[50, 30], [50, 110]],
+      3: [[50, 30], [50, 70], [50, 110]],
+      4: [[25, 30], [75, 30], [25, 110], [75, 110]],
+      5: [[25, 30], [75, 30], [50, 70], [25, 110], [75, 110]],
+      6: [[25, 30], [75, 30], [25, 70], [75, 70], [25, 110], [75, 110]],
+      7: [[25, 30], [75, 30], [50, 50], [25, 70], [75, 70], [25, 110], [75, 110]],
+      8: [[25, 30], [75, 30], [50, 50], [25, 70], [75, 70], [50, 90], [25, 110], [75, 110]],
+      9: [[25, 30], [75, 30], [50, 50], [25, 70], [50, 70], [75, 70], [25, 110], [50, 90], [75, 110]],
+      10: [[25, 24], [75, 24], [25, 46], [75, 46], [25, 68], [75, 68], [25, 90], [75, 90], [25, 112], [75, 112]],
+    };
+
+    function getCardSvgDataUri(rank, suit, hidden) {
+      const key = hidden ? "__back" : `${safeText(rank)}${safeText(suit)}`;
+      if (CARD_ART_CACHE.has(key)) return CARD_ART_CACHE.get(key);
+
+      const svg = hidden
+        ? `
+          <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 140'>
+            <defs>
+              <linearGradient id='g1' x1='0' y1='0' x2='1' y2='1'>
+                <stop offset='0%' stop-color='#2f5d9a'/>
+                <stop offset='100%' stop-color='#1e4170'/>
+              </linearGradient>
+              <pattern id='p1' width='10' height='10' patternUnits='userSpaceOnUse' patternTransform='rotate(45)'>
+                <rect width='10' height='10' fill='rgba(255,255,255,0.08)'/>
+                <rect width='4' height='10' fill='rgba(255,255,255,0.15)'/>
+              </pattern>
+            </defs>
+            <rect x='2' y='2' width='96' height='136' rx='10' fill='url(#g1)' stroke='#d9e7ff' stroke-width='2'/>
+            <rect x='9' y='9' width='82' height='122' rx='8' fill='url(#p1)' opacity='0.9'/>
+            <rect x='24' y='34' width='52' height='72' rx='8' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='2'/>
+            <text x='50' y='76' font-size='14' text-anchor='middle' font-family='Arial, sans-serif' fill='#f0f6ff'>21</text>
+          </svg>
+        `
+        : createCardFaceSvg(rank, suit);
+
+      const uri = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      CARD_ART_CACHE.set(key, uri);
+      return uri;
+    }
+
+    function createCardFaceSvg(rank, suit) {
+      const safeRank = safeText(rank).toUpperCase();
+      const safeSuit = safeText(suit);
+      const red = isRedSuit(safeSuit);
+      const color = red ? "#d83636" : "#1f1f1f";
+      const cornerFont = safeRank === "10" ? 11 : 13;
+
+      const corner = `
+        <g fill='${color}' font-family='Arial, sans-serif' font-weight='700' text-anchor='middle'>
+          <text x='12' y='17' font-size='${cornerFont}'>${safeRank}</text>
+          <text x='12' y='29' font-size='12'>${safeSuit}</text>
+          <g transform='translate(88,111) rotate(180)'>
+            <text x='0' y='0' font-size='${cornerFont}'>${safeRank}</text>
+            <text x='0' y='12' font-size='12'>${safeSuit}</text>
+          </g>
+        </g>
+      `;
+
+      let center = "";
+      if (safeRank === "J" || safeRank === "Q" || safeRank === "K") {
+        center = `
+          <g transform='translate(50,70)'>
+            <rect x='-25' y='-33' width='50' height='66' rx='9' fill='${red ? "#ffe4e4" : "#efefef"}' stroke='${color}' stroke-width='1.5'/>
+            <circle cx='0' cy='-6' r='14' fill='${red ? "#ffd0d0" : "#dddddd"}' stroke='${color}' stroke-width='1.2'/>
+            <text x='0' y='-2' text-anchor='middle' font-size='13' font-weight='700' fill='${color}' font-family='Arial, sans-serif'>${safeRank}</text>
+            <text x='0' y='21' text-anchor='middle' font-size='16' fill='${color}'>${safeSuit}</text>
+          </g>
+        `;
+      } else {
+        const pips = CARD_PIP_LAYOUTS[safeRank] || [];
+        center = pips.map(([x, y]) => `<text x='${x}' y='${y}' text-anchor='middle' dominant-baseline='middle' font-size='18' fill='${color}'>${safeSuit}</text>`).join("");
+      }
+
+      return `
+        <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 140'>
+          <rect x='2' y='2' width='96' height='136' rx='10' fill='#ffffff' stroke='#d7d7d7' stroke-width='2'/>
+          ${corner}
+          ${center}
+        </svg>
+      `;
+    }
+
+    function cardHtml(card) {
+      if (!card) return "";
+      const hidden = Boolean(card.hidden);
+      const src = getCardSvgDataUri(card.rank, card.suit, hidden);
+      return `<div class="card${hidden ? " hidden" : ""}"><img class="card-image" src="${src}" alt="card" /></div>`;
+    }
+
+    function renderCardsStable(container, cards) {
+      const list = Array.isArray(cards) ? cards : [];
+      if (list.length === 0) {
+        if (container.dataset.empty !== "1") {
+          container.innerHTML = "";
+          const placeholder = document.createElement("div");
+          placeholder.className = "line";
+          placeholder.textContent = "暂无手牌";
+          container.appendChild(placeholder);
+          container.dataset.empty = "1";
+        }
+        return;
+      }
+
+      if (container.dataset.empty === "1") {
+        container.innerHTML = "";
+        delete container.dataset.empty;
+      }
+
+      if (container.children.length > 0) {
+        const hasCardNode = Array.from(container.children).some((node) => node.classList && node.classList.contains("card"));
+        if (!hasCardNode) {
+          container.innerHTML = "";
+        }
+      }
+
+      const existing = Array.from(container.children).filter((node) => node.classList && node.classList.contains("card"));
+
+      for (let i = 0; i < list.length; i += 1) {
+        const card = list[i] || {};
+        const hidden = Boolean(card.hidden);
+        const key = `${hidden ? "H" : `${safeText(card.rank)}${safeText(card.suit)}`}:${i}`;
+        let cardNode = existing[i];
+        if (!cardNode) {
+          cardNode = document.createElement("div");
+          cardNode.className = "card";
+          const img = document.createElement("img");
+          img.className = "card-image";
+          img.alt = "card";
+          cardNode.appendChild(img);
+          container.appendChild(cardNode);
+        }
+
+        if (cardNode.dataset.key !== key) {
+          cardNode.dataset.key = key;
+        }
+        cardNode.classList.toggle("hidden", hidden);
+
+        const img = cardNode.querySelector("img.card-image");
+        const src = getCardSvgDataUri(card.rank, card.suit, hidden);
+        if (img && img.getAttribute("src") !== src) {
+          img.setAttribute("src", src);
+        }
+      }
+
+      for (let i = existing.length - 1; i >= list.length; i -= 1) {
+        const node = existing[i];
+        if (node && node.parentNode === container) {
+          container.removeChild(node);
+        }
+      }
+    }
+
+    function phaseLabel(phase) {
+      if (phase === "lobby") return "等待开局";
+      if (phase === "playing") return "进行中";
+      if (phase === "finished") return "已结算";
+      return "未创建";
+    }
+
+    function getPlayerStatusInfo(player) {
+      const status = safeText(player.status);
+      const outcome = safeText(player.outcome);
+      if (outcome === "win") return { text: "胜", cls: "status win" };
+      if (outcome === "lose") return { text: "负", cls: "status lose" };
+      if (outcome === "push") return { text: "和", cls: "status push" };
+      if (status === "busted") return { text: "爆牌", cls: "status lose" };
+      if (status === "blackjack") return { text: "等待操作", cls: "status" };
+      if (status === "stood") return { text: "已停牌", cls: "status" };
+      return { text: "等待操作", cls: "status" };
+    }
+
+    function createPlayerNode() {
+      const article = document.createElement("article");
+      article.className = "player";
+
+      const nameRow = document.createElement("div");
+      nameRow.className = "player-name";
+      const nameStrong = document.createElement("strong");
+      const statusSpan = document.createElement("span");
+      statusSpan.className = "status";
+      nameRow.append(nameStrong, statusSpan);
+
+      const cards = document.createElement("div");
+      cards.className = "cards";
+
+      const points = document.createElement("div");
+      points.className = "line";
+      const pointsLabel = document.createElement("span");
+      pointsLabel.textContent = "点数：";
+      const pointsStrong = document.createElement("strong");
+      points.append(pointsLabel, pointsStrong);
+
+      article.append(nameRow, cards, points);
+      return { article, nameStrong, statusSpan, cards, pointsStrong };
+    }
+
+    function clearPlayerNodes() {
+      for (const [, refs] of playerNodeCache.entries()) {
+        if (refs.article && refs.article.parentNode === dom.players) {
+          dom.players.removeChild(refs.article);
+        }
+      }
+      playerNodeCache.clear();
+    }
+
+    function renderPlayersStable(players, viewer, currentTurnPlayerId) {
+      const list = Array.isArray(players) ? players : [];
+
+      if (list.length === 0) {
+        if (dom.players.dataset.empty !== "1") {
+          clearPlayerNodes();
+          dom.players.innerHTML = '<div class="line">暂无闲家入座</div>';
+          dom.players.dataset.empty = "1";
+        }
+        return;
+      }
+
+      if (dom.players.dataset.empty === "1") {
+        dom.players.innerHTML = "";
+        delete dom.players.dataset.empty;
+      }
+
+      if (playerNodeCache.size === 0 && dom.players.children.length > 0) {
+        dom.players.innerHTML = "";
+      }
+
+      const seen = new Set();
+      for (let index = 0; index < list.length; index += 1) {
+        const player = list[index];
+        const key = String(player.id);
+        seen.add(key);
+        let refs = playerNodeCache.get(key);
+        if (!refs) {
+          refs = createPlayerNode();
+          playerNodeCache.set(key, refs);
+        }
+
+        const nameText = safeText(player.name);
+        if (refs.nameStrong.textContent !== nameText) {
+          refs.nameStrong.textContent = nameText;
+        }
+
+        const statusInfo = getPlayerStatusInfo(player);
+        if (refs.statusSpan.className !== statusInfo.cls) {
+          refs.statusSpan.className = statusInfo.cls;
+        }
+        if (refs.statusSpan.textContent !== statusInfo.text) {
+          refs.statusSpan.textContent = statusInfo.text;
+        }
+
+        const me = Number(player.id) === Number(viewer.id);
+        const current = Number(player.id) === Number(currentTurnPlayerId || 0);
+        refs.article.classList.toggle("me", me);
+        refs.article.classList.toggle("current", current);
+
+        renderCardsStable(refs.cards, player.cards || []);
+
+        const pointsText = safeText(player.points);
+        if (refs.pointsStrong.textContent !== pointsText) {
+          refs.pointsStrong.textContent = pointsText;
+        }
+
+        const currentNodeAtIndex = dom.players.children[index];
+        if (currentNodeAtIndex !== refs.article) {
+          dom.players.insertBefore(refs.article, currentNodeAtIndex || null);
+        }
+      }
+
+      for (const [key, refs] of playerNodeCache.entries()) {
+        if (!seen.has(key)) {
+          if (refs.article && refs.article.parentNode === dom.players) {
+            dom.players.removeChild(refs.article);
+          }
+          playerNodeCache.delete(key);
+        }
+      }
+    }
+
+    function setError(message) {
+      const text = safeText(message);
+      if (dom.errorText.textContent !== text) {
+        dom.errorText.textContent = text;
+      }
+    }
+
+    function buildActionButton(label, action, className, enabled) {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      if (className) btn.className = className;
+      btn.disabled = !enabled || busy;
+      btn.addEventListener("click", () => runAction(action));
+      return btn;
+    }
+
+    function ensureActionButtons() {
+      if (actionButtonNodes.size > 0) return;
+      const defs = [
+        ["创建牌桌", "create", "primary"],
+        ["加入牌桌", "join", "primary"],
+        ["离开牌桌", "leave", ""],
+        ["开始发牌", "start", "primary"],
+        ["要牌", "hit", "primary"],
+        ["停牌", "stand", ""],
+        ["再来一局", "restart", ""],
+        ["关闭牌桌", "close", "warn"],
+      ];
+
+      defs.forEach(([label, action, cls]) => {
+        const button = buildActionButton(label, action, cls, false);
+        button.style.display = "none";
+        actionButtonNodes.set(action, button);
+        dom.actions.appendChild(button);
+      });
+
+      const refresh = document.createElement("button");
+      refresh.textContent = "刷新";
+      refresh.addEventListener("click", async (event) => {
+        event.preventDefault();
+        await loadState(true);
+      });
+      actionButtonNodes.set("refresh", refresh);
+      dom.actions.appendChild(refresh);
+    }
+
+    function updateActionButtons(actions) {
+      ensureActionButtons();
+      const flags = {
+        create: !!actions.canCreate,
+        join: !!actions.canJoin,
+        leave: !!actions.canLeave,
+        start: !!actions.canStart,
+        hit: !!actions.canHit,
+        stand: !!actions.canStand,
+        restart: !!actions.canRestart,
+        close: !!actions.canClose,
+      };
+
+      Object.keys(flags).forEach((key) => {
+        const button = actionButtonNodes.get(key);
+        if (!button) return;
+        const enabled = flags[key];
+        button.style.display = enabled ? "" : "none";
+        button.disabled = busy;
+      });
+
+      const refresh = actionButtonNodes.get("refresh");
+      if (refresh) {
+        refresh.style.display = "";
+        refresh.disabled = busy;
+      }
+    }
+
+    async function postJson(path, payload) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.error) {
+        throw new Error(result.error || "请求失败");
+      }
+      return result;
+    }
+
+    async function loadState(showError) {
+      try {
+        const result = await postJson("/api/blackjack/state", {
+          ...launch,
+          initData,
+        });
+        const nextState = result.state;
+        const nextSignature = safeText(nextState && nextState.stateKey) || getStateSignature(nextState);
+        if (nextSignature === lastStateSignature) {
+          setError("");
+          return;
+        }
+
+        currentState = nextState;
+        lastStateSignature = nextSignature;
+        maybeNotifyTurn(currentState);
+        maybeNotifyPhase(currentState);
+        setError("");
+        render();
+      } catch (error) {
+        if (showError) {
+          setError(String(error && error.message ? error.message : error || "状态加载失败"));
+        }
+      }
+    }
+
+    async function runAction(action) {
+      if (!currentState || busy) return;
+      busy = true;
+      try {
+        const result = await postJson("/api/blackjack/action", {
+          ...launch,
+          initData,
+          action,
+        });
+        const nextState = result.state;
+        currentState = nextState;
+        lastStateSignature = safeText(nextState && nextState.stateKey) || getStateSignature(nextState);
+        maybeNotifyTurn(currentState);
+        maybeNotifyPhase(currentState);
+
+        const isFinished = result && result.finished === true;
+        const isClosed = result && result.closed === true;
+        if (isFinished) {
+          showPhaseBanner("本局已结束");
+        }
+        if (isClosed) {
+          setError("本局已结束，房间已关闭。请回群里重新发送 /21 开新局。");
+        } else if (isFinished) {
+          setError("本局已结束，庄家可选择再来一局；闲家需重新点击加入。");
+        } else {
+          setError("");
+        }
+      } catch (error) {
+        setError(String(error && error.message ? error.message : error || "操作失败"));
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+
+    function render() {
+      const state = currentState;
+      if (!state) return;
+
+      const room = state.room;
+      const viewer = state.viewer || {};
+      const actions = state.actions || {};
+      const pointsRules = state.requirements && state.requirements.points ? state.requirements.points : {};
+      const pointsEnabled = pointsRules.enabled === true;
+      const joinMinInclusive = Number(pointsRules.joinMinInclusive || pointsRules.joinMinExclusive || 0);
+
+      const isViewerAuthed = viewer && viewer.authenticated === true;
+      if (!isViewerAuthed && !dom.errorText.textContent.trim()) {
+        setError("当前为浏览器预览模式（无 initData）：可查看牌局，不能执行要牌/停牌等操作。请使用 Telegram 小程序按钮进入可操作模式。");
+      }
+
+      const chips = [
+        `阶段：${phaseLabel(state.phase)}`,
+        `你的身份：${isViewerAuthed ? (viewer.isDealer ? "庄家" : (viewer.isJoined ? "闲家" : "旁观")) : "浏览器访客"}`,
+      ];
+      chips.push(pointsEnabled ? `入桌门槛：积分 >= ${joinMinInclusive}` : "积分系统：未开启");
+      if (isViewerAuthed && Number.isFinite(Number(pointsRules.viewerPoints))) {
+        chips.push(`我的积分：${Number(pointsRules.viewerPoints)}`);
+      }
+      if (room && room.currentTurnPlayerId) {
+        const turnPlayer = Number(room.currentTurnPlayerId) === Number(room.dealer && room.dealer.id)
+          ? { name: safeText(room.dealer && room.dealer.name ? room.dealer.name : "庄家") }
+          : (room.players || []).find((player) => Number(player.id) === Number(room.currentTurnPlayerId));
+        if (turnPlayer) chips.push(`当前操作：${turnPlayer.name}`);
+      }
+      const chipsHtml = chips.map((text) => `<span class="chip">${escapeHtml(text)}</span>`).join("");
+      if (chipsHtml !== lastRenderCache.chips) {
+        dom.chips.innerHTML = chipsHtml;
+        lastRenderCache.chips = chipsHtml;
+      }
+
+      if (room) {
+        const dealerIsCurrent = Number(room.currentTurnPlayerId || 0) === Number(room.dealer && room.dealer.id || 0);
+        const playersHot = !dealerIsCurrent && Number(room.currentTurnPlayerId || 0) > 0;
+        const actionsHot = viewer && viewer.isCurrentTurn === true;
+        if (dom.dealerPanel && lastRenderCache.dealerHot !== dealerIsCurrent) {
+          dom.dealerPanel.classList.toggle("hot", dealerIsCurrent);
+          lastRenderCache.dealerHot = dealerIsCurrent;
+        }
+        if (dom.playersPanel && lastRenderCache.playersHot !== playersHot) {
+          dom.playersPanel.classList.toggle("hot", playersHot);
+          lastRenderCache.playersHot = playersHot;
+        }
+        if (dom.actionsPanel && lastRenderCache.actionsHot !== actionsHot) {
+          dom.actionsPanel.classList.toggle("hot", actionsHot);
+          lastRenderCache.actionsHot = actionsHot;
+        }
+
+        const dealerTitle = `庄家：${safeText(room.dealer && room.dealer.name ? room.dealer.name : "未定")}`;
+        if (dealerTitle !== lastRenderCache.dealerTitle) {
+          dom.dealerTitle.textContent = dealerTitle;
+          lastRenderCache.dealerTitle = dealerTitle;
+        }
+
+        const dealerPoints = `点数：${safeText(room.dealer && room.dealer.pointsText ? room.dealer.pointsText : "--")}`;
+        if (dealerPoints !== lastRenderCache.dealerPoints) {
+          dom.dealerPoints.textContent = dealerPoints;
+          lastRenderCache.dealerPoints = dealerPoints;
+        }
+
+        const dealerCardsData = room.dealer && room.dealer.cards ? room.dealer.cards : [];
+        renderCardsStable(dom.dealerCards, dealerCardsData);
+        lastRenderCache.dealerCards = "stable";
+
+        const players = Array.isArray(room.players) ? room.players : [];
+        renderPlayersStable(players, viewer, room.currentTurnPlayerId);
+        lastRenderCache.players = "stable";
+
+        const lines = [];
+        if (safeText(state.phase) === "lobby") {
+          if (!pointsEnabled) {
+            lines.push("提示：本群未开启积分系统，当前无法开局。请先开启积分系统。");
+          } else if (Array.isArray(pointsRules.lowPointUsers) && pointsRules.lowPointUsers.length > 0) {
+            lines.push(`提示：以下成员积分需不少于 ${joinMinInclusive} 才能开局：${pointsRules.lowPointUsers.join("、")}`);
+          }
+        }
+        if (room.lastAction) lines.push(`动态：${room.lastAction}`);
+        if (Array.isArray(room.resultLines) && room.resultLines.length > 0) {
+          lines.push("", "结算：", ...room.resultLines.map((line) => `- ${line}`));
+        }
+        const logText = lines.join("\n") || "等待操作...";
+        if (logText !== lastRenderCache.log) {
+          dom.logText.textContent = logText;
+          lastRenderCache.log = logText;
+        }
+      } else {
+        if (dom.dealerPanel && lastRenderCache.dealerHot !== false) {
+          dom.dealerPanel.classList.remove("hot");
+          lastRenderCache.dealerHot = false;
+        }
+        if (dom.playersPanel && lastRenderCache.playersHot !== false) {
+          dom.playersPanel.classList.remove("hot");
+          lastRenderCache.playersHot = false;
+        }
+        if (dom.actionsPanel && lastRenderCache.actionsHot !== false) {
+          dom.actionsPanel.classList.remove("hot");
+          lastRenderCache.actionsHot = false;
+        }
+
+        if (lastRenderCache.dealerTitle !== "庄家") {
+          dom.dealerTitle.textContent = "庄家";
+          lastRenderCache.dealerTitle = "庄家";
+        }
+        if (lastRenderCache.dealerPoints !== "点数：--") {
+          dom.dealerPoints.textContent = "点数：--";
+          lastRenderCache.dealerPoints = "点数：--";
+        }
+        const dealerEmpty = '<div class="line">牌桌未创建</div>';
+        if (lastRenderCache.dealerCards !== dealerEmpty) {
+          dom.dealerCards.innerHTML = dealerEmpty;
+          lastRenderCache.dealerCards = dealerEmpty;
+        }
+        const playersEmpty = '<div class="line">等待庄家创建牌桌</div>';
+        if (lastRenderCache.players !== playersEmpty) {
+          clearPlayerNodes();
+          dom.players.innerHTML = playersEmpty;
+          lastRenderCache.players = playersEmpty;
+        }
+        const logEmpty = "请由房主先创建牌桌。";
+        if (lastRenderCache.log !== logEmpty) {
+          dom.logText.textContent = logEmpty;
+          lastRenderCache.log = logEmpty;
+        }
+      }
+
+      updateActionButtons(actions);
+    }
+
+    (async () => {
+      updateSoundToggle();
+
+      if (dom.soundToggle) {
+        dom.soundToggle.addEventListener("click", () => {
+          hasUserInteracted = true;
+          soundEnabled = !soundEnabled;
+          try {
+            localStorage.setItem("bj_sound_enabled", soundEnabled ? "1" : "0");
+          } catch {}
+          updateSoundToggle();
+          if (soundEnabled) {
+            showPhaseBanner("音效已开启");
+            playToneHint();
+          } else {
+            showPhaseBanner("音效已关闭");
+          }
+        });
+      }
+
+      document.addEventListener("pointerdown", () => {
+        hasUserInteracted = true;
+        const ctx = ensureAudioContext();
+        if (ctx && ctx.state === "suspended") {
+          ctx.resume().then(() => {
+            if (pendingToneHint) {
+              pendingToneHint = false;
+              playToneHint();
+            }
+          }).catch(() => {});
+        } else if (pendingToneHint) {
+          pendingToneHint = false;
+          playToneHint();
+        }
+      }, { passive: true });
+
+      await loadState(true);
+      setInterval(() => {
+        if (!busy) loadState(false);
+      }, 2200);
+    })();
+  </script>
+</body>
+</html>
