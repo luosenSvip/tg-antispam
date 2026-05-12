@@ -44,6 +44,31 @@ const SESSION_QUEUE_MAX_PER_KEY = readIntEnv("SESSION_QUEUE_MAX_PER_KEY", 400, 1
 const SESSION_QUEUE_MAX_GLOBAL = readIntEnv("SESSION_QUEUE_MAX_GLOBAL", 6000, 10, 200000);
 const WEBHOOK_WORKERS = readIntEnv("WEBHOOK_WORKERS", 8, 1, 128);
 const WEBHOOK_QUEUE_MAX = readIntEnv("WEBHOOK_QUEUE_MAX", 10000, 100, 500000);
+const COMMAND_AUTO_DELETE = String(process.env.COMMAND_AUTO_DELETE ?? "1").trim() !== "0";
+
+const BOT_COMMANDS = [
+  { command: "start", description: "开始使用机器人" },
+  { command: "ads", description: "打开反垃圾广告面板" },
+  { command: "assistant", description: "管理群 AI 助手开关" },
+  { command: "jf", description: "查看我的积分" },
+  { command: "jfph", description: "查看积分排行榜" },
+  { command: "shop", description: "打开积分商城" },
+  { command: "dh", description: "兑换商城物品" },
+  { command: "yq", description: "查看邀请信息" },
+  { command: "console", description: "生成订阅后台登录码" },
+  { command: "groups", description: "查看你管理的群" },
+  { command: "sub", description: "查询当前群订阅信息" },
+  { command: "claim", description: "领取群订阅" },
+  { command: "unbind", description: "解绑群订阅" },
+] as const;
+
+function isCommandMessage(ctx: any): boolean {
+  const message = ctx?.message;
+  if (!message) return false;
+  const entities = message.entities || message.caption_entities;
+  if (!Array.isArray(entities) || entities.length === 0) return false;
+  return entities.some((entity: any) => entity?.type === "bot_command" && Number(entity?.offset) === 0);
+}
 
 function getMigratedChatIdFromError(error: GrammyError): number | null {
   if (error.error_code !== 400) return null;
@@ -120,6 +145,19 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
+bot.use(async (ctx, next) => {
+  await next();
+
+  if (!COMMAND_AUTO_DELETE) return;
+  if (!isCommandMessage(ctx)) return;
+  if (ctx.chat?.type === "private") return;
+
+  const chatId = ctx.chat?.id;
+  const messageId = ctx.message?.message_id;
+  if (!chatId || !messageId) return;
+  await ctx.api.deleteMessage(chatId, messageId).catch(() => { });
+});
+
 bot.use(
   createSessionSerialMiddleware({
     maxPendingPerSession: SESSION_QUEUE_MAX_PER_KEY,
@@ -173,6 +211,9 @@ async function bootstrap() {
   console.log(`🤖 AI 模型: ${process.env.AI_MODEL || "gpt-4o-mini"}`);
 
   await bot.init();
+  await bot.api.setMyCommands(BOT_COMMANDS as any).catch((error) => {
+    console.warn("[Bot] 设置机器人命令菜单失败:", error);
+  });
 
   if (WEBHOOK_URL) {
     const webhookUrl = new URL(WEBHOOK_URL);
