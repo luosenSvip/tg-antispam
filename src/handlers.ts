@@ -24,6 +24,13 @@ const MAX_HISTORY = 10;
 const recentUserMessages = new Map<string, { messageId: number; createdAt: number }[]>();
 const RECENT_USER_MESSAGES_TTL_MS = 48 * 60 * 60 * 1000;
 const MAX_RECENT_USER_MESSAGES = 100;
+const recentDuplicateTexts = new Map<string, { text: string; createdAt: number }[]>();
+const DUPLICATE_TEXT_WINDOW_MS = 45_000;
+const DUPLICATE_TEXT_THRESHOLD = 3;
+const DUPLICATE_TEXT_MAX_TRACK = 20;
+const duplicateFloodPenaltyState = new Map<string, { firstAt: number; count: number }>();
+const DUPLICATE_FLOOD_PENALTY_WINDOW_MS = 6 * 60 * 60 * 1000;
+const DUPLICATE_FLOOD_MUTE_MINUTES = 10;
 
 // ==================== 群内回复机器人对话冷却 ====================
 const groupAiReplyCooldown = new Map<number, number>();
@@ -152,6 +159,38 @@ function trackRecentUserMessage(chatId: number, userId: number, messageId: numbe
   recentUserMessages.set(key, rows.slice(-MAX_RECENT_USER_MESSAGES));
 }
 
+function normalizeDuplicateText(text: string): string {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, "");
+}
+
+function trackDuplicateTextAndCheckFlood(chatId: number, userId: number, text: string): boolean {
+  const normalized = normalizeDuplicateText(text);
+  if (!normalized || normalized.length < 2) return false;
+  const key = buildRecentUserMessagesKey(chatId, userId);
+  const now = Date.now();
+  const rows = (recentDuplicateTexts.get(key) || [])
+    .filter((item) => now - item.createdAt <= DUPLICATE_TEXT_WINDOW_MS);
+  rows.push({ text: normalized, createdAt: now });
+  recentDuplicateTexts.set(key, rows.slice(-DUPLICATE_TEXT_MAX_TRACK));
+  const hits = rows.filter((item) => item.text === normalized).length;
+  return hits >= DUPLICATE_TEXT_THRESHOLD;
+}
+
+function trackDuplicateFloodPenalty(chatId: number, userId: number): { count: number; shouldMute: boolean } {
+  const key = buildRecentUserMessagesKey(chatId, userId);
+  const now = Date.now();
+  const prev = duplicateFloodPenaltyState.get(key);
+  const next = (!prev || now - prev.firstAt > DUPLICATE_FLOOD_PENALTY_WINDOW_MS)
+    ? { firstAt: now, count: 1 }
+    : { firstAt: prev.firstAt, count: prev.count + 1 };
+  duplicateFloodPenaltyState.set(key, next);
+  return { count: next.count, shouldMute: next.count >= 2 };
+}
+
 async function deleteRecentUserMessages(api: Context["api"], chatId: number, userId: number): Promise<number> {
   const key = buildRecentUserMessagesKey(chatId, userId);
   const rows = recentUserMessages.get(key) || [];
@@ -191,12 +230,30 @@ setInterval(() => {
 
 setInterval(() => {
   const now = Date.now();
+  for (const [key, state] of duplicateFloodPenaltyState.entries()) {
+    if (now - state.firstAt > DUPLICATE_FLOOD_PENALTY_WINDOW_MS) {
+      duplicateFloodPenaltyState.delete(key);
+    }
+  }
+}, 10 * 60_000);
+
+setInterval(() => {
+  const now = Date.now();
   for (const [key, rows] of recentUserMessages.entries()) {
     const kept = rows.filter((item) => now - item.createdAt <= RECENT_USER_MESSAGES_TTL_MS);
     if (kept.length > 0) recentUserMessages.set(key, kept.slice(-MAX_RECENT_USER_MESSAGES));
     else recentUserMessages.delete(key);
   }
 }, 10 * 60_000);
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, rows] of recentDuplicateTexts.entries()) {
+    const kept = rows.filter((item) => now - item.createdAt <= DUPLICATE_TEXT_WINDOW_MS);
+    if (kept.length > 0) recentDuplicateTexts.set(key, kept.slice(-DUPLICATE_TEXT_MAX_TRACK));
+    else recentDuplicateTexts.delete(key);
+  }
+}, 60_000);
 
 // ==================== 投票阈值 ====================
 const POLL_VOTES_THRESHOLD = 2;
@@ -9436,6 +9493,33 @@ export function registerHandlers(bot: Bot): void {
 
       // 检查群组是否开启反垃圾（仅影响反垃圾链路，不影响上面的回复机器人对话）
       if (!groupEnabled) return;
+
+      if (!isCommand && trimmedMessageText.length > 0) {
+        const duplicateFlood = trackDuplicateTextAndCheckFlood(chatId, userId, trimmedMessageText);
+        if (duplicateFlood) {
+          await tryDeleteSourceMessage(ctx);
+          const penalty = trackDuplicateFloodPenalty(chatId, userId);
+          if (penalty.shouldMute) {
+            const untilDate = Math.floor(Date.now() / 1000) + DUPLICATE_FLOOD_MUTE_MINUTES * 60;
+            await ctx.api.restrictChatMember(chatId, userId, {
+              can_send_messages: false,
+              can_send_other_messages: false,
+              can_add_web_page_previews: false,
+            }, { until_date: untilDate }).catch(() => { });
+          }
+          await replyTempNotice(
+            ctx,
+            penalty.shouldMute
+              ? `🚫 ${await renderUserLink(ctx, chatId, userId)} 重复刷屏（6小时内第 ${penalty.count} 次），已删除并禁言 ${DUPLICATE_FLOOD_MUTE_MINUTES} 分钟。`
+              : `⚠️ ${await renderUserLink(ctx, chatId, userId)} 疑似重复刷屏，消息已删除。`,
+            {
+              parse_mode: "HTML",
+              link_preview_options: { is_disabled: true },
+            }
+          );
+          return;
+        }
+      }
 
       // === 刷屏口令过滤：仅在检测到抽奖 Bot 的群启用 ===
       if (lotteryActiveGroups.has(chatId) && bodyMessageText.length <= 30 && !hasPhoto) {
