@@ -89,6 +89,52 @@ Telegram 群组 AI 反垃圾广告机器人，基于 AI 自动识别并封禁垃
 
 ## VPS 部署教程
 
+## 一键命令速查（安装 / 部署 / 更新）
+
+> 以下命令可直接复制执行。
+
+### A. 远程一键安装（自动安装依赖 + 生成 `.env` + 编译）
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/<你的用户名>/<你的仓库>/main/install.sh)
+```
+
+### B. 本地仓库一键初始化并部署 Docker（首次推荐）
+
+```bash
+bash ./deploy.sh --init
+```
+
+### C. 正常部署 / 重部署
+
+```bash
+bash ./deploy.sh
+```
+
+### D. 覆盖重建 `.env`（配置重置场景）
+
+```bash
+bash ./deploy.sh --init --force
+```
+
+### E. 跳过镜像构建快速重启容器
+
+```bash
+bash ./deploy.sh --no-build
+```
+
+### F. 查看部署脚本帮助
+
+```bash
+bash ./deploy.sh --help
+```
+
+### G. 一键更新代码并重启（项目根目录执行）
+
+```bash
+bash ./update.sh
+```
+
 ## 一键部署（Docker）
 
 ### 0) 前置条件
