@@ -2,6 +2,8 @@ import "dotenv/config";
 import { Bot, GrammyError } from "grammy";
 import type { Update } from "grammy/types";
 import { autoRetry } from "@grammyjs/auto-retry";
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
 import { registerHandlers } from "./handlers";
 import { registerWerewolfHandlers } from "./werewolf";
 import { registerSpyHandlers } from "./spy";
@@ -33,6 +35,26 @@ if (!hasAIConfig) {
 
 const WEBHOOK_URL = String(process.env.WEBHOOK_URL || "").trim();
 const WEBHOOK_SECRET = String(process.env.WEBHOOK_SECRET || "").trim();
+const AUTH_REQUIRED = ["1", "true", "yes", "on"].includes(String(process.env.AUTH_REQUIRED || "").trim().toLowerCase());
+const AUTHORIZED_USER_IDS = new Set(
+  String(process.env.AUTHORIZED_USER_IDS || "")
+    .split(",")
+    .map((raw) => Number(raw.trim()))
+    .filter((id) => Number.isFinite(id) && id > 0)
+);
+const ROOT_ADMIN_USER_ID = Number(process.env.ADMIN_USER_ID || 0);
+const AUTH_SERVER_URL = String(process.env.AUTH_SERVER_URL || "").trim();
+const AUTH_LICENSE_KEY = String(process.env.AUTH_LICENSE_KEY || "").trim();
+const ENABLE_TG_UPDATE = ["1", "true", "yes", "on"].includes(String(process.env.ENABLE_TG_UPDATE || "1").trim().toLowerCase());
+const exec = promisify(execCb);
+
+function escapeHtml(input: string): string {
+  return String(input || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 function readIntEnv(name: string, fallback: number, min: number, max: number): number {
   const raw = Number(process.env[name]);
@@ -67,6 +89,80 @@ function isTelegramUpdate(payload: unknown): payload is Update {
 }
 
 const bot = new Bot(BOT_TOKEN);
+
+async function verifyLicenseIfConfigured(): Promise<void> {
+  if (!AUTH_SERVER_URL || !AUTH_LICENSE_KEY) return;
+  const endpoint = AUTH_SERVER_URL.replace(/\/+$/, "");
+  const payload = {
+    license_key: AUTH_LICENSE_KEY,
+    bot_token_prefix: BOT_TOKEN.slice(0, 12),
+    admin_user_id: ROOT_ADMIN_USER_ID || undefined,
+  };
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`status=${response.status}`);
+    }
+    const data: any = await response.json().catch(() => ({}));
+    if (data && data.ok === false) {
+      throw new Error(String(data.message || "license rejected"));
+    }
+    console.log("✅ 授权校验通过");
+  } catch (error) {
+    console.error("❌ 授权校验失败，已拒绝启动。", error);
+    process.exit(1);
+  }
+}
+
+async function checkGitUpdateStatus(): Promise<{ supported: boolean; behind: boolean; local?: string; remote?: string; message: string }> {
+  try {
+    const { stdout: inRepo } = await exec("git rev-parse --is-inside-work-tree");
+    if (!String(inRepo).trim().includes("true")) {
+      return { supported: false, behind: false, message: "当前目录不是 Git 仓库，无法检查更新。" };
+    }
+  } catch {
+    return { supported: false, behind: false, message: "当前环境不支持 Git 更新检测。" };
+  }
+  try {
+    const { stdout: localOut } = await exec("git rev-parse HEAD");
+    const { stdout: remoteOut } = await exec("git ls-remote --heads origin HEAD");
+    const local = String(localOut).trim();
+    const remote = String(remoteOut).trim().split(/\s+/)[0] || "";
+    if (!local || !remote) return { supported: false, behind: false, message: "无法读取本地或远端版本。" };
+    return {
+      supported: true,
+      behind: local !== remote,
+      local,
+      remote,
+      message: local === remote ? "当前已是最新版本。" : "检测到新版本可更新。",
+    };
+  } catch {
+    return { supported: false, behind: false, message: "更新检测失败（可能未配置 origin）。" };
+  }
+}
+
+async function runUpdateScript(): Promise<{ ok: boolean; output: string }> {
+  try {
+    const { stdout, stderr } = await exec("bash ./update.sh", { maxBuffer: 1024 * 1024 * 8 });
+    const combined = `${stdout || ""}${stderr || ""}`.trim();
+    return { ok: true, output: combined.slice(-3500) || "update.sh 执行完成。" };
+  } catch (error: any) {
+    const output = String(error?.stdout || "") + String(error?.stderr || "") + String(error?.message || "");
+    return { ok: false, output: output.trim().slice(-3500) || "update.sh 执行失败。" };
+  }
+}
+
+function isAuthorizedUser(userId: number | undefined): boolean {
+  if (!AUTH_REQUIRED) return true;
+  if (!userId) return false;
+  if (AUTHORIZED_USER_IDS.size === 0) return false;
+  if (AUTHORIZED_USER_IDS.has(userId)) return true;
+  return Number.isFinite(ROOT_ADMIN_USER_ID) && ROOT_ADMIN_USER_ID > 0 && ROOT_ADMIN_USER_ID === userId;
+}
 
 bot.api.config.use(autoRetry());
 bot.api.config.use(async (prev, method, payload, signal) => {
@@ -107,6 +203,85 @@ bot.api.config.use(async (prev, method, payload, signal) => {
     }
   }
   return prev(method, payload, signal);
+});
+
+bot.use(async (ctx, next) => {
+  if (ENABLE_TG_UPDATE && ctx.chat?.type === "private" && ctx.from?.id && ctx.message?.text?.startsWith("/update")) {
+    if (!Number.isFinite(ROOT_ADMIN_USER_ID) || ROOT_ADMIN_USER_ID <= 0 || ctx.from.id !== ROOT_ADMIN_USER_ID) {
+      await ctx.reply("⛔ 仅 ADMIN_USER_ID 可执行更新操作。").catch(() => { });
+      return;
+    }
+    const arg = ctx.message.text.trim().split(/\s+/)[1]?.toLowerCase() || "check";
+    if (arg === "check") {
+      const status = await checkGitUpdateStatus();
+      await ctx.reply(
+        `🔎 更新检测\n\n结果: ${status.message}\nlocal: <code>${(status.local || "-").slice(0, 12)}</code>\nremote: <code>${(status.remote || "-").slice(0, 12)}</code>`,
+        { parse_mode: "HTML" }
+      ).catch(() => { });
+      return;
+    }
+    if (arg === "now" || arg === "run") {
+      await ctx.reply("⏳ 开始执行 update.sh，请稍候...").catch(() => { });
+      const result = await runUpdateScript();
+      await ctx.reply(
+        `${result.ok ? "✅ 更新脚本执行完成" : "❌ 更新脚本执行失败"}\n\n<pre>${escapeHtml(result.output || "-")}</pre>`,
+        { parse_mode: "HTML" }
+      ).catch(() => { });
+      return;
+    }
+    await ctx.reply("用法：/update check 或 /update now").catch(() => { });
+    return;
+  }
+
+  if (ctx.chat?.type === "private" && ctx.from?.id && ctx.message?.text?.startsWith("/auth")) {
+    if (!Number.isFinite(ROOT_ADMIN_USER_ID) || ROOT_ADMIN_USER_ID <= 0 || ctx.from.id !== ROOT_ADMIN_USER_ID) {
+      await ctx.reply("⛔ 仅 ADMIN_USER_ID 可管理授权名单。").catch(() => { });
+      return;
+    }
+    const parts = ctx.message.text.trim().split(/\s+/);
+    const action = (parts[1] || "").toLowerCase();
+    const targetId = Number(parts[2] || 0);
+    if (action === "list") {
+      const ids = Array.from(AUTHORIZED_USER_IDS.values()).sort((a, b) => a - b);
+      await ctx.reply(ids.length ? `✅ 当前授权用户：\n${ids.join("\n")}` : "⚠️ 当前授权列表为空。").catch(() => { });
+      return;
+    }
+    if (!Number.isFinite(targetId) || targetId <= 0) {
+      await ctx.reply("用法：/auth list 或 /auth add <tgid> 或 /auth rm <tgid>").catch(() => { });
+      return;
+    }
+    if (action === "add") {
+      AUTHORIZED_USER_IDS.add(targetId);
+      await ctx.reply(`✅ 已授权：${targetId}`).catch(() => { });
+      return;
+    }
+    if (action === "rm" || action === "del" || action === "remove") {
+      AUTHORIZED_USER_IDS.delete(targetId);
+      await ctx.reply(`✅ 已移除授权：${targetId}`).catch(() => { });
+      return;
+    }
+    await ctx.reply("用法：/auth list 或 /auth add <tgid> 或 /auth rm <tgid>").catch(() => { });
+    return;
+  }
+
+  if (!ctx.from) return next();
+  const authorized = isAuthorizedUser(ctx.from.id);
+  if (authorized) return next();
+
+  const isPrivate = ctx.chat?.type === "private";
+  const isInteractiveGroupCommand = !!ctx.message?.text?.trim().startsWith("/");
+  if (!isPrivate && !isInteractiveGroupCommand) return next();
+
+  const tip = "🔐 当前机器人已启用授权访问，请联系管理员添加你的 Telegram ID。";
+  if (isPrivate) {
+    await ctx.reply(tip).catch(() => { });
+  } else if (ctx.chat?.id && ctx.message?.message_id) {
+    await ctx.api.sendMessage(ctx.chat.id, tip, {
+      reply_parameters: { message_id: ctx.message.message_id },
+      link_preview_options: { is_disabled: true },
+    }).catch(() => { });
+  }
+  return;
 });
 
 bot.use(async (ctx, next) => {
@@ -171,8 +346,19 @@ let webServer: ReturnType<typeof startCommercialWebServer> | null = null;
 async function bootstrap() {
   console.log("🛡️ TG 反垃圾广告机器人启动中...");
   console.log(`🤖 AI 模型: ${process.env.AI_MODEL || "gpt-4o-mini"}`);
+  await verifyLicenseIfConfigured();
 
   await bot.init();
+  if (ENABLE_TG_UPDATE && Number.isFinite(ROOT_ADMIN_USER_ID) && ROOT_ADMIN_USER_ID > 0) {
+    const status = await checkGitUpdateStatus();
+    if (status.supported && status.behind) {
+      await bot.api.sendMessage(
+        ROOT_ADMIN_USER_ID,
+        `📦 检测到机器人可更新版本。\nlocal: <code>${status.local?.slice(0, 12)}</code>\nremote: <code>${status.remote?.slice(0, 12)}</code>\n可私聊发送 <code>/update now</code> 一键更新。`,
+        { parse_mode: "HTML", link_preview_options: { is_disabled: true } }
+      ).catch(() => { });
+    }
+  }
 
   if (WEBHOOK_URL) {
     const webhookUrl = new URL(WEBHOOK_URL);

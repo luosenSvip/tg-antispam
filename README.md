@@ -89,6 +89,52 @@ Telegram 群组 AI 反垃圾广告机器人，基于 AI 自动识别并封禁垃
 
 ## VPS 部署教程
 
+## 一键部署（Docker）
+
+```bash
+cp .env.example .env
+# 编辑 .env 填入 BOT_TOKEN / AI_POOL_1 / AUTHORIZED_USER_IDS
+bash ./deploy.sh
+```
+
+部署脚本会自动执行：`docker compose build` + `docker compose up -d`。
+
+## 一键安装（参考版）
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/<你的用户名>/<你的仓库>/main/install.sh)
+```
+
+安装脚本会交互询问：
+- 机器人 TOKEN
+- 你的 Chat ID
+- 授权服务器地址 / 授权码（可选）
+- Webhook HTTPS 地址（可选）
+- 是否自定义 AI 接口
+
+安装后会自动生成 `.env`、安装依赖并编译。
+
+## 授权访问（只允许白名单用户）
+
+在 `.env` 中配置：
+
+```bash
+AUTH_REQUIRED=1
+AUTHORIZED_USER_IDS=12345678,87654321
+```
+
+- `AUTH_REQUIRED=1`：开启授权校验。
+- 未授权用户在私聊中无法使用机器人；群里发送命令也会被拦截提示。
+- 未授权用户的普通群消息不会影响反垃圾被动检测链路。
+- 管理员（`ADMIN_USER_ID`）可私聊使用：
+  - `/auth list`
+  - `/auth add <tgid>`
+  - `/auth rm <tgid>`
+  - `/update check`（检查是否有新版本）
+  - `/update now`（执行 `update.sh` 一键更新）
+  > 以上是运行时内存名单，重启后会恢复为 `.env` 里的 `AUTHORIZED_USER_IDS`。
+- 若配置 `AUTH_SERVER_URL` + `AUTH_LICENSE_KEY`，机器人启动前会请求授权服务校验，失败则拒绝启动。
+
 ### 1. 准备工作
 
 - 一台 VPS（Ubuntu/Debian/CentOS 等）
