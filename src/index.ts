@@ -129,7 +129,7 @@ async function checkGitUpdateStatus(): Promise<{ supported: boolean; behind: boo
   }
   try {
     const { stdout: localOut } = await exec("git rev-parse HEAD");
-    const { stdout: remoteOut } = await exec("git ls-remote --heads origin HEAD");
+    const { stdout: remoteOut } = await exec("git ls-remote origin HEAD");
     const local = String(localOut).trim();
     const remote = String(remoteOut).trim().split(/\s+/)[0] || "";
     if (!local || !remote) return { supported: false, behind: false, message: "无法读取本地或远端版本。" };
