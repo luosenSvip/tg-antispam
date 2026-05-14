@@ -91,13 +91,55 @@ Telegram 群组 AI 反垃圾广告机器人，基于 AI 自动识别并封禁垃
 
 ## 一键部署（Docker）
 
+### 0) 前置条件
+
+- 已安装 Docker
+- 已安装 Docker Compose 插件（可用 `docker compose version` 验证）
+
+### 1) 首次部署（推荐）
+
 ```bash
-cp .env.example .env
-# 编辑 .env 填入 BOT_TOKEN / AI_POOL_1 / AUTHORIZED_USER_IDS
+bash ./deploy.sh --init
+```
+
+- 脚本会交互询问并生成 `.env`。
+- 生成完成后会直接继续执行部署（无需再手动跑第二次命令）。
+
+### 2) 日常更新部署
+
+```bash
 bash ./deploy.sh
 ```
 
-部署脚本会自动执行：`docker compose build` + `docker compose up -d`。
+### 3) 常用参数
+
+```bash
+# 重新初始化并覆盖已有 .env
+bash ./deploy.sh --init --force
+
+# 跳过镜像构建，仅重启容器（配置变更场景）
+bash ./deploy.sh --no-build
+
+# 查看帮助
+bash ./deploy.sh --help
+```
+
+### 4) 执行流程说明
+
+`deploy.sh` 默认会按顺序执行：
+
+1. 校验 Docker / Docker Compose 是否可用
+2. 按需初始化 `.env`（`--init`）
+3. `docker compose down`
+4. `docker compose build --pull`（`--no-build` 时跳过）
+5. `docker compose up -d`
+6. 输出 `docker compose ps`
+
+### 5) 首次失败时排查
+
+- 提示 Docker 未安装：先安装 Docker
+- 提示 compose 不可用：安装 Docker Compose 插件
+- 提示缺少 `.env`：执行 `bash ./deploy.sh --init`
 
 ## 一键安装（参考版）
 
