@@ -91,6 +91,20 @@ Telegram 群组 AI 反垃圾广告机器人，基于 AI 自动识别并封禁垃
 
 ## 一键部署（Docker）
 
+### 方式 1：本地仓库一键初始化并部署（推荐）
+
+```bash
+bash ./deploy.sh --init
+```
+
+脚本会交互生成 `.env`（包含 `BOT_TOKEN` / `AI_POOL_1` 等基础配置），随后可直接再次执行：
+
+```bash
+bash ./deploy.sh
+```
+
+### 方式 2：手动编辑 `.env` 后部署
+
 ```bash
 cp .env.example .env
 # 编辑 .env 填入 BOT_TOKEN / AI_POOL_1 / AUTHORIZED_USER_IDS
